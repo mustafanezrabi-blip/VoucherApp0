@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Voucher Manager</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- SheetJS for Excel Export -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+      
+      :root {
+        --primary: #2563eb;
+        --primary-hover: #1d4ed8;
+      }
+
+      body { 
+        font-family: 'Inter', sans-serif; 
+        background-color: #f8fafc; 
+        color: #0f172a;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Animations */
+      @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+      .animate-fade-in { animation: fade-in 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+      
+      @keyframes slide-up { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+      .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+      /* Toggle Switch Styles */
+      .toggle-checkbox:checked {
+        right: 0;
+        border-color: #2563eb;
+      }
+      .toggle-checkbox:checked + .toggle-label {
+        background-color: #2563eb;
+      }
+      
+      /* Utilities */
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+      }
+
+      @media print {
+        .no-print { display: none !important; }
+        .print-only { display: block !important; }
+        body { background-color: white; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        @page { margin: 0; size: A4; }
+        .print\:break-before-page { break-before: page; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        
+        /* Hide scrollbars in print */
+        ::-webkit-scrollbar { display: none; }
+      }
+      .print-only { display: none; }
+    </style>
+    
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.1/client",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "react/": "https://aistudiocdn.com/react@^19.2.1/"
+  }
+}
+</script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" data-type="module">
+      import React, { useState, useEffect, useMemo } from 'react';
+      import ReactDOM from 'react-dom/client';
+      import { 
+        LayoutDashboard, FileText, Settings as SettingsIcon, LogOut, Plus, Download, 
+        Lock, TrendingUp, TrendingDown, Wallet, Calendar, ArrowUpRight, ArrowDownLeft, Globe,
+        Save, X, Trash2, RefreshCw, AlertTriangle, Edit2, Printer, Search, FileDown, 
+        Upload, CheckCircle, AlertCircle, Shield, Layout, PenTool, MoveUp, MoveDown, Check, 
+        Database, ArrowRightLeft, FileJson, FileSpreadsheet, AlignLeft, AlignCenter, AlignRight,
+        MoreVertical, ChevronRight, User, CreditCard, Grid
+      } from 'lucide-react';
+      import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+
+      // ==========================================
+      // UTILS
+      // ==========================================
+
+      const numberToWords = (num) => {
+        const a = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+        const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+        const numToString = (n) => {
+          if (n < 20) return a[n];
+          const digit = n % 10;
+          if (n < 100) return b[Math.floor(n / 10)] + (digit ? '-' + a[digit] : '');
+          if (n < 1000) return a[Math.floor(n / 100)] + ' Hundred' + (n % 100 === 0 ? '' : ' ' + numToString(n % 100));
+          if (n < 1000000) return numToString(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 !== 0 ? ' ' + numToString(n % 1000) : '');
+          if (n < 1000000000) return numToString(Math.floor(n / 1000000)) + ' Million' + (n % 1000000 !== 0 ? ' ' + numToString(n % 1000000) : '');
+          return 'Number too large';
+        };
+        if (num === 0) return 'Zero';
+        const integerPart = Math.floor(num);
+        const decimalPart = Math.round((num - integerPart) * 100);
+        let result = numToString(integerPart);
+        if (decimalPart > 0) result += ` and ${decimalPart}/100`;
+        return result + ' Only';
+      };
+
+      const formatDateForInput = (dateStr) => {
+        if (!dateStr) return new Date().toISOString().split('T')[0];
+        if (dateStr.includes('/')) {
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+                if(parts[0].length === 4) return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+        }
+        return dateStr;
+      };
+
+      // ==========================================
+      // SERVICES
+      // ==========================================
+
+      const STORAGE_KEY = 'voucher_app_data';
+      const SETTINGS_KEY = 'voucher_app_settings';
+
+      const DEFAULT_FIELDS = [
+        { id: 'donor', label: 'Donor', type: 'text', visible: true, required: false, width: 'w-24' },
+        { id: 'location', label: 'Location', type: 'text', visible: true, required: false, width: 'w-24' },
+        { id: 'project', label: 'Project', type: 'text', visible: true, required: false, width: 'w-24' },
+        { id: 'accountCode', label: 'Acc. Code', type: 'text', visible: true, required: false, width: 'w-24' },
+      ];
+
+      const DEFAULT_SETTINGS = {
+        companyName: 'Turquoise Mountain',
+        logoUrl: '',
+        logoWidth: 200,
+        logoPosition: 'left',
+        currencySymbol: '؋',
+        currencyCode: 'AFN',
+        enableDualCurrency: false,
+        secondaryCurrencyCode: 'USD',
+        secondaryCurrencySymbol: '$',
+        security: {
+          adminPin: '0000',
+          userPin: '1234',
+          permissions: { userCanDelete: false, userCanExport: true, userCanEditSettings: false }
+        },
+        signatures: [
+          { id: '1', label: 'Prepared By', labelReceipt: 'Prepared By', visible: true },
+          { id: '2', label: 'Checked By', labelReceipt: 'Checked By', visible: true },
+          { id: '3', label: 'Approved By', labelReceipt: 'Approved By', visible: true },
+          { id: '4', label: 'Received By', labelReceipt: 'Paid By', visible: true },
+        ],
+        itemFields: DEFAULT_FIELDS,
+        data: { autoExportCsv: false },
+        pdfSettings: {
+            template: 'classic', // 'classic' | 'professional'
+            bodyFontSize: 12,
+            titleFontSize: 30,
+            margins: { top: 15, right: 15, bottom: 15, left: 15 },
+            signatureAlign: 'center', // 'left', 'center', 'right'
+            boldLabels: true,
+            compactTable: false
+        }
+      };
+
+      const mapLegacyFields = (legacyLabels) => {
+          if (!legacyLabels) return null;
+          return [
+              { id: 'donor', label: legacyLabels.donor?.label || 'Donor', type: 'text', visible: legacyLabels.donor?.visible ?? true, required: false, width: 'w-24' },
+              { id: 'location', label: legacyLabels.location?.label || 'Location', type: 'text', visible: legacyLabels.location?.visible ?? true, required: false, width: 'w-24' },
+              { id: 'project', label: legacyLabels.project?.label || 'Project', type: 'text', visible: legacyLabels.project?.visible ?? true, required: false, width: 'w-24' },
+              { id: 'accountCode', label: legacyLabels.accountCode?.label || 'Acc. Code', type: 'text', visible: legacyLabels.accountCode?.visible ?? true, required: false, width: 'w-24' },
+          ];
+      };
+
+      const saveSettings = (settings) => {
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { console.error(e); }
+      };
+
+      const loadSettings = () => {
+        try {
+          const data = localStorage.getItem(SETTINGS_KEY);
+          if (!data) return DEFAULT_SETTINGS;
+          const parsed = JSON.parse(data);
+          
+          const migratedSignatures = (parsed.signatures || DEFAULT_SETTINGS.signatures).map(sig => ({
+              ...sig,
+              labelReceipt: sig.labelReceipt || (sig.label === 'Received By' ? 'Paid By' : sig.label)
+          }));
+
+          return {
+              ...DEFAULT_SETTINGS,
+              ...parsed,
+              signatures: migratedSignatures,
+              security: { 
+                  ...DEFAULT_SETTINGS.security, 
+                  ...parsed.security,
+                  permissions: { ...DEFAULT_SETTINGS.security.permissions, ...(parsed.security?.permissions || {}) }
+              },
+              itemFields: parsed.itemFields || mapLegacyFields(parsed.fieldLabels) || DEFAULT_FIELDS,
+              data: { ...DEFAULT_SETTINGS.data, ...(parsed.data || {}) },
+              pdfSettings: { ...DEFAULT_SETTINGS.pdfSettings, ...(parsed.pdfSettings || {}) }
+          };
+        } catch (e) { return DEFAULT_SETTINGS; }
+      };
+
+      const saveVouchers = (vouchers) => {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(vouchers)); } catch (e) { console.error(e); }
+      };
+
+      const loadVouchers = () => {
+        try {
+          const data = localStorage.getItem(STORAGE_KEY);
+          if (!data) return [];
+          const parsed = JSON.parse(data);
+          const settings = loadSettings();
+          return parsed.map((v) => {
+            let items = v.items || [];
+            if (items.length === 0) {
+              items = [{
+                id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                customValues: { description: v.description || 'Balance brought forward' },
+                description: v.description || 'Balance brought forward',
+                amount: v.amount || 0
+              }];
+            } else {
+              items = items.map((item) => ({
+                  id: item.id || Date.now().toString(36),
+                  amount: item.amount,
+                  description: item.description,
+                  customValues: item.customValues || {
+                      donor: item.donor || '',
+                      location: item.location || '',
+                      project: item.project || '',
+                      accountCode: item.accountCode || '',
+                  }
+              }));
+            }
+            return { ...v, items, currency: v.currency || settings.currencyCode };
+          });
+        } catch (e) { return []; }
+      };
+
+      const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
+
+      const generateAdvancedVoucherNumber = (vouchers, type) => {
+        const prefix = type === 'PAYMENT' ? 'CPV' : 'RPV';
+        const location = 'KBL';
+        const now = new Date();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const year = now.getFullYear();
+        const regex = new RegExp(`^${prefix}-${location}-${month}-${year}-(\\d{4})$`);
+        let maxSeq = 0;
+        vouchers.forEach(v => {
+          const match = v.voucherNo.match(regex);
+          if (match) {
+            const seq = parseInt(match[1], 10);
+            if (seq > maxSeq) maxSeq = seq;
+          }
+        });
+        return `${prefix}-${location}-${month}-${year}-${(maxSeq + 1).toString().padStart(4, '0')}`;
+      };
+
+      const validateVoucherFormat = (voucherNo, type) => {
+        const prefix = type === 'PAYMENT' ? 'CPV' : 'RPV';
+        const regex = new RegExp(`^${prefix}-KBL-\\d{1,2}-\\d{4}-\\d{4}$`);
+        return regex.test(voucherNo);
+      };
+
+      const exportToExcelFile = (vouchers, settings) => {
+          if (!window.XLSX) {
+              alert("Excel library not loaded. Please refresh.");
+              return;
+          }
+          const activeFields = settings.itemFields.filter(f => f.visible);
+          const data = vouchers.map(v => {
+              const base = {
+                  Date: v.date,
+                  'Voucher No': v.voucherNo,
+                  Type: v.type,
+                  Party: v.partyName,
+                  Amount: v.amount,
+                  Currency: v.currency || settings.currencyCode,
+                  Mode: v.mode,
+                  Description: v.description,
+              };
+              if(v.items.length === 1) {
+                  activeFields.forEach(f => {
+                      base[f.label] = v.items[0].customValues[f.id] || '';
+                  });
+              } else {
+                  base['Note'] = "Multi-item voucher (details inside app)";
+              }
+              return base;
+          });
+
+          const worksheet = XLSX.utils.json_to_sheet(data);
+          const workbook = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(workbook, worksheet, "Vouchers");
+          XLSX.writeFile(workbook, `Vouchers_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+      };
+
+      // ==========================================
+      // COMPONENTS
+      // ==========================================
+
+      const Login = ({ onLogin, settings }) => {
+        const [pin, setPin] = useState('');
+        const [error, setError] = useState('');
+        const handleSubmit = (e) => {
+          e.preventDefault();
+          if (pin === settings.security.adminPin) onLogin('admin');
+          else if (pin === settings.security.userPin) onLogin('user');
+          else setError('Invalid PIN.');
+        };
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-slate-50 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-64 bg-slate-900 skew-y-3 origin-top-left -translate-y-12"></div>
+            <div className="bg-white p-10 rounded-2xl shadow-xl w-full max-w-md animate-fade-in relative z-10 border border-slate-100">
+              <div className="flex justify-center mb-8">
+                <div className="p-4 bg-blue-600 rounded-2xl shadow-lg shadow-blue-200">
+                  <Lock className="w-8 h-8 text-white" />
+                </div>
+              </div>
+              <h2 className="text-3xl font-bold text-center text-slate-800 mb-2 tracking-tight">{settings.companyName}</h2>
+              <p className="text-center text-slate-500 mb-8 font-medium">Voucher Management System</p>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Security PIN</label>
+                  <input type="password" value={pin} onChange={(e) => { setPin(e.target.value); setError(''); }} className="w-full px-4 py-3 border border-slate-200 bg-slate-50 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-center text-2xl tracking-[0.5em] font-bold text-slate-800 transition-all placeholder-slate-300" placeholder="••••" maxLength={4} autoFocus />
+                </div>
+                {error && <div className="text-red-600 text-sm text-center font-medium bg-red-50 p-3 rounded-lg flex items-center justify-center gap-2"><AlertCircle size={16}/>{error}</div>}
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-4 rounded-xl transition-all shadow-lg shadow-blue-600/20 active:scale-[0.98]">Access Dashboard</button>
+                <div className="mt-6 pt-6 border-t border-slate-100 text-center"><p className="text-xs text-slate-400 font-medium">Standard Access: 1234 | Admin Access: 0000</p></div>
+              </form>
+            </div>
+          </div>
+        );
+      };
+
+      const Dashboard = ({ vouchers, settings }) => {
+        // ... (Dashboard content as before)
+        const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+        const [selectedCurrency, setSelectedCurrency] = useState(settings.currencyCode);
+
+        const stats = useMemo(() => {
+          const filteredVouchers = vouchers.filter(v => v.currency === selectedCurrency || (!v.currency && selectedCurrency === settings.currencyCode));
+          const totalReceipts = filteredVouchers.filter(v => v.type === 'RECEIPT').reduce((sum, v) => sum + v.amount, 0);
+          const totalPayments = filteredVouchers.filter(v => v.type === 'PAYMENT').reduce((sum, v) => sum + v.amount, 0);
+          return { totalReceipts, totalPayments, balance: totalReceipts - totalPayments, count: filteredVouchers.length };
+        }, [vouchers, selectedCurrency, settings.currencyCode]);
+
+        const monthlyStats = useMemo(() => {
+          const filtered = vouchers.filter(v => v.date.startsWith(selectedMonth) && (v.currency === selectedCurrency || (!v.currency && selectedCurrency === settings.currencyCode)));
+          const receipts = filtered.filter(v => v.type === 'RECEIPT').reduce((sum, v) => sum + v.amount, 0);
+          const payments = filtered.filter(v => v.type === 'PAYMENT').reduce((sum, v) => sum + v.amount, 0);
+          return { receipts, payments, balance: receipts - payments, count: filtered.length };
+        }, [vouchers, selectedMonth, selectedCurrency, settings.currencyCode]);
+
+        const dataForChart = useMemo(() => [
+            { name: 'Receipts', value: stats.totalReceipts, type: 'Receipts' },
+            { name: 'Payments', value: stats.totalPayments, type: 'Payments' }
+        ], [stats]);
+
+        const currentSymbol = selectedCurrency === settings.secondaryCurrencyCode ? settings.secondaryCurrencySymbol : settings.currencySymbol;
+        const StatCard = ({ label, value, icon: Icon, colorClass, bgClass, prefix = '' }) => (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-md">
+                <div className="flex justify-between items-start mb-4">
+                    <div className={`p-3 rounded-xl ${bgClass}`}>
+                        <Icon className={`w-6 h-6 ${colorClass}`} />
+                    </div>
+                    <div className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-full">YTD</div>
+                </div>
+                <div>
+                    <p className="text-sm font-medium text-slate-500 mb-1">{label}</p>
+                    <h3 className={`text-2xl font-bold tracking-tight ${colorClass}`}>{prefix}{value.toLocaleString('en-US', { minimumFractionDigits: prefix ? 2 : 0 })}</h3>
+                </div>
+            </div>
+        );
+
+        return (
+          <div className="space-y-8 animate-fade-in">
+            {settings.enableDualCurrency && (
+                <div className="flex justify-end">
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-1.5 flex gap-1">
+                        <button onClick={() => setSelectedCurrency(settings.currencyCode)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${selectedCurrency === settings.currencyCode ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>{settings.currencyCode}</button>
+                        <button onClick={() => setSelectedCurrency(settings.secondaryCurrencyCode)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${selectedCurrency === settings.secondaryCurrencyCode ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:bg-slate-50'}`}>{settings.secondaryCurrencyCode}</button>
+                    </div>
+                </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <StatCard label={`Net Balance (${selectedCurrency})`} value={stats.balance} icon={Wallet} colorClass={stats.balance >= 0 ? 'text-slate-800' : 'text-red-600'} bgClass="bg-blue-50" prefix={currentSymbol} />
+              <StatCard label="Total Receipts" value={stats.totalReceipts} icon={TrendingUp} colorClass="text-emerald-600" bgClass="bg-emerald-50" prefix={'+' + currentSymbol} />
+              <StatCard label="Total Payments" value={stats.totalPayments} icon={TrendingDown} colorClass="text-red-600" bgClass="bg-red-50" prefix={'-' + currentSymbol} />
+              <StatCard label="Total Vouchers" value={stats.count} icon={FileText} colorClass="text-indigo-600" bgClass="bg-indigo-50" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-96">
+                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2"><ArrowRightLeft size={18} className="text-slate-400"/> Cash Flow Overview</h3>
+                    <ResponsiveContainer width="100%" height="85%">
+                        <BarChart data={dataForChart} margin={{top: 20, right: 30, left: 20, bottom: 5}}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                            <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', padding: '12px'}} formatter={(value) => [`${currentSymbol}${value.toLocaleString()}`, '']} />
+                            <Bar dataKey="value" radius={[6, 6, 6, 6]} barSize={60}>
+                                {dataForChart.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.type === 'Receipts' ? '#10b981' : '#ef4444'} />))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-lg font-bold text-slate-800">Monthly Details</h3>
+                        <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none focus:border-blue-500" />
+                    </div>
+                    <div className="space-y-6 flex-1">
+                        <div className="p-4 rounded-xl bg-emerald-50/50 border border-emerald-100">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-emerald-800">Receipts</span>
+                                <ArrowDownLeft size={16} className="text-emerald-600"/>
+                            </div>
+                            <div className="text-2xl font-bold text-emerald-700">{currentSymbol}{monthlyStats.receipts.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                        </div>
+                        <div className="p-4 rounded-xl bg-red-50/50 border border-red-100">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-sm font-semibold text-red-800">Payments</span>
+                                <ArrowUpRight size={16} className="text-red-600"/>
+                            </div>
+                            <div className="text-2xl font-bold text-red-700">{currentSymbol}{monthlyStats.payments.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                        </div>
+                        <div className="mt-auto pt-6 border-t border-slate-100">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-slate-500">Net Balance</span>
+                                <span className={`text-xl font-bold ${monthlyStats.balance >= 0 ? 'text-slate-800' : 'text-red-600'}`}>
+                                    {monthlyStats.balance >= 0 ? '+' : ''}{currentSymbol}{monthlyStats.balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+          </div>
+        );
+      };
+
+      const VoucherForm = ({ onSave, onCancel, initialData, existingVouchers, settings }) => {
+        // ... (VoucherForm code same as before, no changes needed for print)
+        const [formData, setFormData] = useState({ date: new Date().toISOString().split('T')[0], type: 'PAYMENT', mode: 'CASH', partyName: '', description: '', voucherNo: '', items: [], currency: settings.currencyCode });
+        const [items, setItems] = useState([{ id: generateId(), customValues: {}, description: '', amount: 0 }]);
+        const [error, setError] = useState('');
+        const [isManualOverride, setIsManualOverride] = useState(false);
+
+        useEffect(() => {
+          if (initialData) {
+            setFormData(initialData);
+            setItems(initialData.items && initialData.items.length > 0 ? initialData.items : [{ id: generateId(), customValues: {}, description: initialData.description || '', amount: initialData.amount || 0 }]);
+            setIsManualOverride(true);
+          } else {
+            const initialType = 'PAYMENT';
+            setFormData(prev => ({ ...prev, type: initialType, voucherNo: generateAdvancedVoucherNumber(existingVouchers, initialType), currency: settings.currencyCode }));
+          }
+        }, [initialData]);
+
+        useEffect(() => {
+          if (!initialData && !isManualOverride && formData.type) {
+            setFormData(prev => ({ ...prev, voucherNo: generateAdvancedVoucherNumber(existingVouchers, formData.type) }));
+          }
+        }, [formData.type, existingVouchers, initialData, isManualOverride]);
+
+        const totalAmount = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+        const activeFields = settings.itemFields.filter(f => f.visible);
+        const currentSymbol = formData.currency === settings.secondaryCurrencyCode ? settings.secondaryCurrencySymbol : settings.currencySymbol;
+
+        const handleCustomFieldChange = (itemId, fieldId, value) => setItems(prev => prev.map(item => item.id !== itemId ? item : { ...item, customValues: { ...item.customValues, [fieldId]: value } }));
+        const handleItemChange = (id, field, value) => setItems(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+        const addItem = () => setItems(prev => [...prev, { id: generateId(), customValues: {}, description: '', amount: 0 }]);
+        const removeItem = (id) => items.length > 1 && setItems(prev => prev.filter(item => item.id !== id));
+
+        const handleSubmit = (e) => {
+          e.preventDefault();
+          setError('');
+          if (!formData.partyName || !formData.date) return setError("Please fill in Party Name and Date.");
+          if (totalAmount <= 0) return setError("Total amount must be greater than zero.");
+          for (const field of activeFields) {
+              for (const item of items) {
+                  const val = item.customValues[field.id];
+                  if (field.required && !val) return setError(`Field "${field.label}" is required.`);
+              }
+          }
+          if (!validateVoucherFormat(formData.voucherNo || '', formData.type)) return setError(`Invalid Voucher Number Format.`);
+          if (existingVouchers.some(v => v.voucherNo === formData.voucherNo && v.id !== initialData?.id)) return setError("Voucher Number exists.");
+          onSave({ ...formData, id: initialData ? initialData.id : generateId(), createdAt: initialData ? initialData.createdAt : Date.now(), description: items.length > 1 ? `Multi-item (${items.length})` : items[0].description, amount: totalAmount, items: items });
+        };
+
+        const partyLabel = formData.type === 'RECEIPT' ? 'Received From' : 'Paid To';
+
+        return (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 transition-all">
+            <div className="bg-white w-full rounded-2xl shadow-2xl max-w-6xl max-h-[95vh] flex flex-col overflow-hidden animate-slide-up ring-1 ring-white/10">
+              <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center shrink-0">
+                  <h3 className="text-xl font-bold text-slate-800">{initialData ? 'Edit Voucher' : 'New Voucher'}</h3>
+                  <button onClick={onCancel} className="text-slate-400 hover:text-slate-600 transition bg-slate-50 p-2 rounded-full"><X size={20} /></button>
+              </div>
+              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 bg-slate-50/50">
+                {error && <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-xl flex items-center text-sm font-medium"><AlertTriangle className="w-5 h-5 mr-3" />{error}</div>}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6">Voucher Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">Voucher Type</label>
+                            <select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-slate-50 font-medium">
+                                <option value="PAYMENT">Payment (Out)</option>
+                                <option value="RECEIPT">Receipt (In)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">Voucher No</label>
+                            <div className="flex shadow-sm rounded-lg">
+                                <input type="text" value={formData.voucherNo} onChange={(e) => { setFormData({ ...formData, voucherNo: e.target.value }); setIsManualOverride(true); }} className="w-full bg-white border border-slate-200 border-r-0 rounded-l-lg p-2.5 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none text-slate-700" />
+                                <button type="button" onClick={() => { setIsManualOverride(false); setFormData(prev => ({ ...prev, voucherNo: generateAdvancedVoucherNumber(existingVouchers, formData.type) })); }} className="bg-slate-100 border border-slate-200 px-3 rounded-r-lg hover:bg-slate-200 transition text-slate-600"><RefreshCw size={16} /></button>
+                            </div>
+                        </div>
+                        <div><label className="text-xs font-bold text-slate-500 mb-1.5 block">Date</label><input type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" /></div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">Payment Mode</label>
+                            <select value={formData.mode} onChange={(e) => setFormData({ ...formData, mode: e.target.value })} className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="CASH">Cash</option><option value="BANK">Bank Transfer</option><option value="CHEQUE">Cheque</option><option value="ONLINE">Online / Digital</option>
+                            </select>
+                        </div>
+                        <div className="md:col-span-2">
+                            <label className="text-xs font-bold text-slate-500 mb-1.5 block">{partyLabel}</label>
+                            <input type="text" value={formData.partyName} onChange={(e) => setFormData({ ...formData, partyName: e.target.value })} className="w-full border border-slate-200 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium" placeholder="Enter Name..." />
+                        </div>
+                    </div>
+                </div>
+                <div className="mb-6">
+                  <div className="flex justify-between items-end mb-4">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Line Items</h4>
+                      {settings.enableDualCurrency && <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-lg border border-slate-200"><span className="text-xs font-bold text-slate-500">Currency</span><select value={formData.currency} onChange={(e) => setFormData({...formData, currency: e.target.value})} className="text-sm font-bold bg-transparent outline-none text-slate-800"><option value={settings.currencyCode}>{settings.currencyCode}</option><option value={settings.secondaryCurrencyCode}>{settings.secondaryCurrencyCode}</option></select></div>}
+                  </div>
+                  <div className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                    <table className="w-full text-left">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase font-bold text-slate-500">
+                            <tr>
+                                {activeFields.map(f => <th key={f.id} className="px-4 py-3">{f.label}</th>)}
+                                <th className="px-4 py-3 w-1/3">Description</th>
+                                <th className="px-4 py-3 text-right">Amount</th>
+                                <th className="px-4 py-3 w-10"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                        {items.map(item => (
+                            <tr key={item.id} className="group hover:bg-slate-50/50 transition-colors">
+                                {activeFields.map(f => (
+                                    <td key={f.id} className="p-2 pl-4 align-top">
+                                        {f.type === 'select' ? 
+                                            <select value={item.customValues[f.id] || ''} onChange={(e) => handleCustomFieldChange(item.id, f.id, e.target.value)} className="w-full border border-slate-200 p-2 rounded text-sm bg-white focus:border-blue-500 outline-none"><option value="">-</option>{f.options?.map(o => <option key={o} value={o}>{o}</option>)}</select> 
+                                            : <input type={f.type} value={item.customValues[f.id] || ''} onChange={(e) => handleCustomFieldChange(item.id, f.id, e.target.value)} className="w-full border border-slate-200 p-2 rounded text-sm focus:border-blue-500 outline-none" placeholder={f.label} />
+                                        }
+                                    </td>
+                                ))}
+                                <td className="p-2 align-top"><input type="text" value={item.description} onChange={(e) => handleItemChange(item.id, 'description', e.target.value)} className="w-full border border-slate-200 p-2 rounded text-sm focus:border-blue-500 outline-none" placeholder="Item description" /></td>
+                                <td className="p-2 align-top"><input type="number" step="0.01" value={item.amount} onChange={(e) => handleItemChange(item.id, 'amount', parseFloat(e.target.value))} className="w-full text-right border border-slate-200 p-2 rounded text-sm font-mono font-medium focus:border-blue-500 outline-none" placeholder="0.00" /></td>
+                                <td className="p-2 text-center align-top pt-3"><button type="button" onClick={() => removeItem(item.id)} className="text-slate-300 hover:text-red-500 transition"><Trash2 size={16} /></button></td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                    <div className="p-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                        <button type="button" onClick={addItem} className="text-sm text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition"><Plus size={16}/> Add Line Item</button>
+                        <div className="text-right flex items-center gap-4">
+                            <span className="text-xs uppercase font-bold text-slate-400">Total ({formData.currency})</span>
+                            <span className="text-2xl font-bold font-mono text-slate-800 tracking-tight">{currentSymbol} {totalAmount.toFixed(2)}</span>
+                        </div>
+                    </div>
+                  </div>
+                </div>
+              </form>
+              <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-3 z-10">
+                  <button onClick={onCancel} className="px-6 py-2.5 text-slate-600 font-medium hover:bg-slate-50 rounded-xl transition">Cancel</button>
+                  <button onClick={handleSubmit} className="px-8 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center gap-2 font-bold shadow-lg shadow-blue-600/20 active:scale-[0.98] transition-all"><Save size={18}/> Save Voucher</button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const VoucherList = ({ vouchers, onEdit, onDelete, onBulkDelete, onPrint, onExportExcel, settings, role }) => {
+        // ... (VoucherList content, no change needed)
+        const [searchTerm, setSearchTerm] = useState('');
+        const [filterType, setFilterType] = useState('ALL');
+        const [startDate, setStartDate] = useState('');
+        const [endDate, setEndDate] = useState('');
+        const [selectedIds, setSelectedIds] = useState(new Set());
+
+        const filtered = useMemo(() => vouchers.filter(v => {
+            const matchesSearch = v.voucherNo.toLowerCase().includes(searchTerm.toLowerCase()) || v.partyName.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesType = filterType === 'ALL' || v.type === filterType;
+            const matchesDate = (!startDate || v.date >= startDate) && (!endDate || v.date <= endDate);
+            return matchesSearch && matchesType && matchesDate;
+        }).sort((a, b) => new Date(b.date) - new Date(a.date) || b.createdAt - a.createdAt), [vouchers, searchTerm, filterType, startDate, endDate]);
+
+        const toggleSelection = (id) => { const s = new Set(selectedIds); if (s.has(id)) s.delete(id); else s.add(id); setSelectedIds(s); };
+        const selectAll = () => setSelectedIds(selectedIds.size === filtered.length ? new Set() : new Set(filtered.map(v => v.id)));
+        const getSymbol = (v) => v.currency === settings.secondaryCurrencyCode ? settings.secondaryCurrencySymbol : settings.currencySymbol;
+        
+        return (
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col h-full overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex flex-wrap gap-4 justify-between items-center bg-white z-10">
+               <div className="flex gap-3 flex-wrap flex-1 items-center">
+                   <div className="relative w-full sm:w-64">
+                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                       <input type="text" placeholder="Search vouchers..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-sm font-medium" />
+                   </div>
+                   <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
+                     <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="bg-transparent border-none text-xs font-medium text-slate-600 p-1 outline-none" />
+                     <span className="text-slate-300">|</span>
+                     <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="bg-transparent border-none text-xs font-medium text-slate-600 p-1 outline-none" />
+                   </div>
+                   <div className="bg-slate-50 border border-slate-200 rounded-xl p-1 flex">
+                       {['ALL', 'PAYMENT', 'RECEIPT'].map(t => (
+                           <button key={t} onClick={() => setFilterType(t)} className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${filterType === t ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{t}</button>
+                       ))}
+                   </div>
+               </div>
+               <div className="flex gap-3">
+                   {selectedIds.size > 0 ? (
+                       <div className="flex items-center gap-2 bg-slate-900 text-white px-1.5 py-1.5 rounded-xl text-sm shadow-lg animate-fade-in">
+                           <span className="font-bold px-3">{selectedIds.size} Selected</span>
+                           <button onClick={() => onPrint(vouchers.filter(v => selectedIds.has(v.id)))} className="flex items-center gap-2 hover:bg-white/20 px-3 py-1.5 rounded-lg transition"><Printer size={16}/> Print</button>
+                           {(role === 'admin' || settings.security.permissions.userCanDelete) && <button onClick={() => { onBulkDelete(Array.from(selectedIds)); setSelectedIds(new Set()); }} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition"><Trash2 size={16}/> Delete</button>}
+                       </div>
+                   ) : (
+                       <button onClick={() => onExportExcel(filtered)} className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl text-sm font-bold transition shadow-sm">
+                           <FileSpreadsheet size={18} className="text-emerald-600"/> Export Excel
+                       </button>
+                   )}
+               </div>
+            </div>
+            <div className="overflow-x-auto flex-1">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50/80 text-slate-500 font-semibold border-b border-slate-100 backdrop-blur-sm sticky top-0 z-10">
+                        <tr>
+                            <th className="p-5 w-14"><input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0} onChange={selectAll} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer" /></th>
+                            <th className="p-5">Date</th>
+                            <th className="p-5">Voucher No</th>
+                            <th className="p-5">Type</th>
+                            <th className="p-5">Party Name</th>
+                            <th className="p-5 text-right">Amount</th>
+                            <th className="p-5 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                        {filtered.map(v => (
+                            <tr key={v.id} className="hover:bg-blue-50/30 transition-colors group">
+                                <td className="p-5"><input type="checkbox" checked={selectedIds.has(v.id)} onChange={() => toggleSelection(v.id)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer" /></td>
+                                <td className="p-5 text-slate-600 whitespace-nowrap font-medium">{v.date}</td>
+                                <td className="p-5 font-mono text-xs font-bold text-slate-500 group-hover:text-blue-600 transition-colors">{v.voucherNo}</td>
+                                <td className="p-5">
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${v.type === 'RECEIPT' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-rose-50 text-rose-700 border-rose-100'}`}>
+                                        {v.type === 'RECEIPT' ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />} {v.type}
+                                    </span>
+                                </td>
+                                <td className="p-5 font-bold text-slate-700">{v.partyName}</td>
+                                <td className="p-5 text-right font-mono font-bold text-slate-800">{getSymbol(v)} {v.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                <td className="p-5 text-right">
+                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => onPrint([v])} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Print"><Printer size={16} /></button>
+                                        <button onClick={() => onEdit(v)} className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition" title="Edit"><Edit2 size={16} /></button>
+                                        {(role === 'admin' || settings.security.permissions.userCanDelete) && <button onClick={() => onDelete(v.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Delete"><Trash2 size={16} /></button>}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {filtered.length === 0 && (
+                            <tr><td colSpan="7" className="p-12 text-center text-slate-400">No vouchers found matching your criteria.</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+          </div>
+        );
+      };
+
+      const SettingsModal = ({ settings, onSave, onClose, onRestore }) => {
+          // ... (SettingsModal content same as before)
+          const [activeTab, setActiveTab] = useState('general');
+          const [formData, setFormData] = useState(settings);
+          const [newField, setNewField] = useState({ label: '', type: 'text', visible: true, required: false, options: [] });
+          
+          const handleLogo = (e) => { const file = e.target.files?.[0]; if(file) { const r = new FileReader(); r.onload = () => setFormData({...formData, logoUrl: r.result}); r.readAsDataURL(file); } };
+          const handleFieldChange = (idx, key, val) => { const fields = [...formData.itemFields]; fields[idx] = { ...fields[idx], [key]: val }; setFormData({ ...formData, itemFields: fields }); };
+          const addField = () => { if (!newField.label) return; const f = { id: Date.now().toString(), ...newField, options: typeof newField.options === 'string' ? newField.options.split(',').map(s=>s.trim()) : [] }; setFormData({ ...formData, itemFields: [...formData.itemFields, f] }); setNewField({ label: '', type: 'text', visible: true, required: false, options: [] }); };
+          const removeField = (idx) => { if(confirm("Remove field?")) { setFormData({ ...formData, itemFields: formData.itemFields.filter((_, i) => i !== idx) }); } };
+          const moveField = (idx, dir) => { const f = [...formData.itemFields]; const target = dir === 'up' ? idx - 1 : idx + 1; if (target >= 0 && target < f.length) { [f[idx], f[target]] = [f[target], f[idx]]; setFormData({ ...formData, itemFields: f }); } };
+          const handleSignatureChange = (index, field, value) => { const newSigs = [...formData.signatures]; newSigs[index] = { ...newSigs[index], [field]: value }; setFormData(prev => ({ ...prev, signatures: newSigs })); };
+          const addSignature = () => { setFormData(prev => ({ ...prev, signatures: prev.signatures.filter((_, i) => i !== index) })); };
+          const removeSignature = (index) => { setFormData(prev => ({ ...prev, signatures: prev.signatures.filter((_, i) => i !== index) })); };
+          const backup = () => { const blob = new Blob([JSON.stringify({ settings: formData, vouchers: loadVouchers() }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'backup.json'; a.click(); };
+          const restore = (e) => { const file = e.target.files?.[0]; if(!file) return; const r = new FileReader(); r.onload = (ev) => { try { const d = JSON.parse(ev.target.result); onRestore(d.vouchers, d.settings); setFormData(d.settings); alert("Restored."); } catch(err) { alert("Error."); } }; r.readAsText(file); };
+          
+          const CURRENCY_OPTIONS = [ { code: 'AFN', symbol: '؋', label: 'Afghan Afghani (AFN)' }, { code: 'USD', symbol: '$', label: 'United States Dollar (USD)' }, { code: 'EUR', symbol: '€', label: 'Euro (EUR)' }, { code: 'GBP', symbol: '£', label: 'British Pound (GBP)' }, { code: 'INR', symbol: '₹', label: 'Indian Rupee (INR)' }, { code: 'PKR', symbol: '₨', label: 'Pakistani Rupee (PKR)' }, ];
+
+          const TabButton = ({ id, label, icon: Icon }) => (
+              <button onClick={() => setActiveTab(id)} className={`w-full p-3 rounded-xl text-left flex gap-3 items-center transition-all ${activeTab === id ? 'bg-slate-900 text-white font-bold shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+                  <Icon size={18} /> {label}
+              </button>
+          );
+
+          return (
+             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[60] p-6"><div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-fade-in"><div className="bg-white border-b p-6 flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">System Settings</h2><button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600"><X size={24}/></button></div><div className="flex flex-1 overflow-hidden"><div className="w-72 bg-slate-50 p-6 border-r border-slate-100 flex flex-col gap-2"><TabButton id="general" label="General Branding" icon={Layout}/><TabButton id="pdf" label="PDF Styling" icon={Printer}/><TabButton id="fields" label="Custom Fields" icon={PenTool}/><TabButton id="signatures" label="Signatures" icon={PenTool}/><TabButton id="security" label="Access Control" icon={Shield}/><TabButton id="data" label="Data & Backup" icon={Database}/></div>
+             <div className="flex-1 p-10 overflow-y-auto">
+                {activeTab === 'general' && <div className="space-y-8">
+                    <h3 className="text-xl font-bold text-slate-800 border-b pb-4">General Configuration</h3>
+                    <div><label className="block text-sm font-bold text-slate-500 mb-2">Organization Name</label><input type="text" value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} className="w-full border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-800 font-medium"/></div>
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                        <label className="font-bold flex items-center gap-2 mb-4 text-slate-800"><Globe size={18} className="text-blue-600"/> Currency Settings</label>
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="col-span-2"><label className="text-xs font-bold text-slate-400 uppercase mb-1">Preset</label><select className="w-full border p-2.5 rounded-lg bg-white" value={CURRENCY_OPTIONS.find(c=>c.code===formData.currencyCode)?.code || 'CUSTOM'} onChange={e=>{const s=CURRENCY_OPTIONS.find(c=>c.code===e.target.value); if(s) setFormData({...formData, currencyCode: s.code, currencySymbol: s.symbol})}}>{CURRENCY_OPTIONS.map(c=><option key={c.code} value={c.code}>{c.label}</option>)}<option value="CUSTOM">Custom</option></select></div>
+                            <div><label className="text-xs font-bold text-slate-400 uppercase mb-1">Code</label><input type="text" value={formData.currencyCode} onChange={e=>setFormData({...formData, currencyCode: e.target.value})} className="w-full border p-2.5 rounded-lg bg-white font-mono"/></div>
+                            <div><label className="text-xs font-bold text-slate-400 uppercase mb-1">Symbol</label><input type="text" value={formData.currencySymbol} onChange={e=>setFormData({...formData, currencySymbol: e.target.value})} className="w-full border p-2.5 rounded-lg bg-white font-mono"/></div>
+                        </div>
+                    </div>
+                    <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100">
+                        <div className="flex justify-between items-center mb-4"><label className="font-bold flex items-center gap-2 text-indigo-900"><ArrowRightLeft size={18}/> Dual Currency Mode</label><div className={`w-12 h-6 rounded-full relative cursor-pointer transition ${formData.enableDualCurrency ? 'bg-indigo-600' : 'bg-slate-300'}`} onClick={() => setFormData({...formData, enableDualCurrency: !formData.enableDualCurrency})}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${formData.enableDualCurrency ? 'left-[26px]' : 'left-[2px]'}`}></div></div></div>
+                        {formData.enableDualCurrency && <div className="grid grid-cols-2 gap-6 animate-fade-in pt-2">
+                            <div className="col-span-2"><label className="text-xs font-bold text-indigo-400 uppercase mb-1">Secondary Preset</label><select className="w-full border border-indigo-200 p-2.5 rounded-lg bg-white text-indigo-900" value={CURRENCY_OPTIONS.find(c => c.code === formData.secondaryCurrencyCode && c.symbol === formData.secondaryCurrencySymbol) ? formData.secondaryCurrencyCode : 'CUSTOM'} onChange={(e) => { const s = CURRENCY_OPTIONS.find(c => c.code === e.target.value); if (s) setFormData({ ...formData, secondaryCurrencyCode: s.code, secondaryCurrencySymbol: s.symbol }); }}>{CURRENCY_OPTIONS.map(c => <option key={c.code} value={c.code}>{c.label}</option>)}<option value="CUSTOM">Custom</option></select></div>
+                            <div><label className="text-xs font-bold text-indigo-400 uppercase mb-1">Code</label><input type="text" value={formData.secondaryCurrencyCode} onChange={(e) => setFormData({...formData, secondaryCurrencyCode: e.target.value})} className="w-full border border-indigo-200 p-2.5 rounded-lg bg-white text-indigo-900 font-mono" /></div>
+                            <div><label className="text-xs font-bold text-indigo-400 uppercase mb-1">Symbol</label><input type="text" value={formData.secondaryCurrencySymbol} onChange={(e) => setFormData({...formData, secondaryCurrencySymbol: e.target.value})} className="w-full border border-indigo-200 p-2.5 rounded-lg bg-white text-indigo-900 font-mono" /></div>
+                        </div>}
+                    </div>
+                    <div>
+                        <h4 className="font-bold text-slate-800 mb-4">Logo</h4>
+                        <div className="flex gap-6 items-start">
+                            <div className="w-40 h-40 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center overflow-hidden">{formData.logoUrl ? <img src={formData.logoUrl} className="w-full h-full object-contain" /> : <span className="text-xs text-slate-400 font-medium">No Logo</span>}</div>
+                            <div className="flex-1 space-y-4">
+                                <label className="inline-flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 px-4 py-2 rounded-lg cursor-pointer font-medium text-sm transition"><Upload size={16}/> Upload Image <input type="file" accept="image/*" onChange={handleLogo} className="hidden"/></label>
+                                {formData.logoUrl && <div className="space-y-4 pt-2">
+                                    <div><label className="text-xs font-bold text-slate-400 uppercase">Size</label><input type="range" min="50" max="400" value={formData.logoWidth} onChange={e=>setFormData({...formData, logoWidth: parseInt(e.target.value)})} className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer mt-2"/></div>
+                                    <div><label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Alignment</label><div className="flex gap-2">{['left', 'center', 'right'].map(pos => <button key={pos} onClick={()=>setFormData({...formData, logoPosition: pos})} className={`px-3 py-1 rounded text-xs font-bold uppercase border ${formData.logoPosition===pos ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}`}>{pos}</button>)}</div></div>
+                                </div>}
+                            </div>
+                        </div>
+                    </div>
+                </div>}
+                
+                {activeTab === 'pdf' && <div className="space-y-8">
+                    <h3 className="text-xl font-bold text-slate-800 border-b pb-4">PDF Output Customization</h3>
+                    
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                      <label className="font-bold flex items-center gap-2 mb-4 text-slate-800"><Grid size={18}/> PDF Template</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <label className={`cursor-pointer border-2 p-4 rounded-xl flex flex-col gap-2 ${formData.pdfSettings.template === 'classic' ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-800">Classic</span>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.pdfSettings.template === 'classic' ? 'border-blue-600' : 'border-slate-300'}`}>
+                                {formData.pdfSettings.template === 'classic' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600"></div>}
+                            </div>
+                            <input type="radio" name="template" className="hidden" value="classic" checked={formData.pdfSettings.template === 'classic'} onChange={() => setFormData({...formData, pdfSettings: {...formData.pdfSettings, template: 'classic'}})} />
+                          </div>
+                          <div className="w-full h-24 bg-slate-100 rounded border border-slate-200 flex flex-col p-2 gap-1">
+                             <div className="w-1/3 h-2 bg-slate-300 rounded"></div>
+                             <div className="w-full h-1 bg-slate-200 rounded mt-2"></div>
+                             <div className="w-full h-1 bg-slate-200 rounded"></div>
+                             <div className="mt-auto flex gap-1">
+                                <div className="w-1/3 h-6 bg-slate-300 rounded"></div>
+                             </div>
+                          </div>
+                          <p className="text-xs text-slate-500">Standard clean layout</p>
+                        </label>
+
+                        <label className={`cursor-pointer border-2 p-4 rounded-xl flex flex-col gap-2 ${formData.pdfSettings.template === 'professional' ? 'border-blue-600 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-800">Professional</span>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${formData.pdfSettings.template === 'professional' ? 'border-blue-600' : 'border-slate-300'}`}>
+                                {formData.pdfSettings.template === 'professional' && <div className="w-2.5 h-2.5 rounded-full bg-blue-600"></div>}
+                            </div>
+                            <input type="radio" name="template" className="hidden" value="professional" checked={formData.pdfSettings.template === 'professional'} onChange={() => setFormData({...formData, pdfSettings: {...formData.pdfSettings, template: 'professional'}})} />
+                          </div>
+                           <div className="w-full h-24 bg-slate-100 rounded border border-slate-200 flex flex-col p-2 gap-1">
+                             <div className="flex justify-between mb-1">
+                                <div className="w-8 h-8 bg-slate-300 rounded"></div>
+                                <div className="w-12 h-8 border border-slate-300 rounded"></div>
+                             </div>
+                             <div className="w-full h-4 bg-black rounded-sm opacity-20"></div>
+                             <div className="w-full h-1 bg-slate-200 rounded mt-1"></div>
+                          </div>
+                          <p className="text-xs text-slate-500">Detailed header & table grid</p>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-8">
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Body Font Size</label>
+                            <div className="flex items-center gap-4">
+                                <input type="range" min="8" max="16" value={formData.pdfSettings.bodyFontSize} onChange={e => setFormData({...formData, pdfSettings: { ...formData.pdfSettings, bodyFontSize: parseInt(e.target.value) }})} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                                <span className="font-mono font-bold w-12 text-center">{formData.pdfSettings.bodyFontSize}px</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Title / Heading Size</label>
+                            <div className="flex items-center gap-4">
+                                <input type="range" min="20" max="48" value={formData.pdfSettings.titleFontSize} onChange={e => setFormData({...formData, pdfSettings: { ...formData.pdfSettings, titleFontSize: parseInt(e.target.value) }})} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer" />
+                                <span className="font-mono font-bold w-12 text-center">{formData.pdfSettings.titleFontSize}px</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+                        <label className="font-bold flex items-center gap-2 mb-4 text-slate-800"><Layout size={18}/> Page Margins (mm)</label>
+                        <div className="grid grid-cols-4 gap-4">
+                            {['top', 'right', 'bottom', 'left'].map(side => (
+                                <div key={side}>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{side}</label>
+                                    <input type="number" min="0" max="50" value={formData.pdfSettings.margins[side]} onChange={e => setFormData({...formData, pdfSettings: { ...formData.pdfSettings, margins: { ...formData.pdfSettings.margins, [side]: parseInt(e.target.value) || 0 } }})} className="w-full border p-2 rounded-lg text-sm text-center font-mono focus:border-blue-500 outline-none" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <label className="text-xs font-bold text-slate-500 uppercase block">Signature Block Alignment</label>
+                        <div className="flex gap-2">
+                            {['left', 'center', 'right'].map(align => (
+                                <button key={align} onClick={() => setFormData({...formData, pdfSettings: { ...formData.pdfSettings, signatureAlign: align }})} className={`flex-1 py-3 rounded-xl text-sm font-bold uppercase border transition ${formData.pdfSettings.signatureAlign === align ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>
+                                    {align}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <label className="flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
+                            <span className="font-bold text-slate-700">Bold Field Labels</span>
+                            <input type="checkbox" checked={formData.pdfSettings.boldLabels} onChange={e => setFormData({...formData, pdfSettings: { ...formData.pdfSettings, boldLabels: e.target.checked }})} className="w-5 h-5 text-blue-600 rounded" />
+                        </label>
+                        <label className="flex items-center justify-between p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50">
+                            <span className="font-bold text-slate-700">Compact Table Mode</span>
+                            <input type="checkbox" checked={formData.pdfSettings.compactTable} onChange={e => setFormData({...formData, pdfSettings: { ...formData.pdfSettings, compactTable: e.target.checked }})} className="w-5 h-5 text-blue-600 rounded" />
+                        </label>
+                    </div>
+                </div>}
+                
+                {activeTab === 'fields' && <div className="space-y-6">
+                    <h3 className="text-xl font-bold text-slate-800 border-b pb-4">Table Columns</h3>
+                    <div className="space-y-3">
+                        {formData.itemFields.map((f, i) => (
+                            <div key={f.id} className="flex gap-4 items-center bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                <div className="flex flex-col gap-1 text-slate-300"><button onClick={()=>moveField(i,'up')} className="hover:text-blue-600"><MoveUp size={14}/></button><button onClick={()=>moveField(i,'down')} className="hover:text-blue-600"><MoveDown size={14}/></button></div>
+                                <div className="flex-1 grid grid-cols-4 gap-4">
+                                    <div className="col-span-1"><label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Label</label><input value={f.label} onChange={(e) => handleFieldChange(i, 'label', e.target.value)} className="w-full border p-2 rounded-lg text-sm bg-slate-50 focus:bg-white transition"/></div>
+                                    <div className="col-span-1"><label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Type</label><select value={f.type} onChange={(e) => handleFieldChange(i, 'type', e.target.value)} className="w-full border p-2 rounded-lg text-sm bg-white"><option value="text">Text</option><option value="number">Number</option><option value="date">Date</option><option value="select">Dropdown</option></select></div>
+                                    <div className="col-span-2 flex items-center justify-between pt-5">
+                                        <div className="flex gap-4">
+                                            <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={f.visible} onChange={(e) => handleFieldChange(i, 'visible', e.target.checked)} className="rounded text-blue-600"/> <span className="text-sm font-medium">Visible</span></label>
+                                            <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={f.required} onChange={(e) => handleFieldChange(i, 'required', e.target.checked)} className="rounded text-red-600"/> <span className="text-sm font-medium">Required</span></label>
+                                        </div>
+                                        <button onClick={() => removeField(i)} className="text-slate-300 hover:text-red-500 p-2"><Trash2 size={18}/></button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100 border-dashed">
+                        <div className="flex gap-4 items-end">
+                            <div className="flex-1"><label className="text-xs font-bold text-blue-400 uppercase mb-1">New Field Name</label><input value={newField.label} onChange={e=>setNewField({...newField, label: e.target.value})} className="w-full border border-blue-200 p-2.5 rounded-lg text-sm" placeholder="e.g. Cost Center"/></div>
+                            <div className="w-40"><label className="text-xs font-bold text-blue-400 uppercase mb-1">Type</label><select value={newField.type} onChange={e=>setNewField({...newField, type: e.target.value})} className="w-full border border-blue-200 p-2.5 rounded-lg text-sm bg-white"><option value="text">Text</option><option value="number">Number</option><option value="date">Date</option><option value="select">Dropdown</option></select></div>
+                            <button onClick={addField} disabled={!newField.label} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-bold text-sm transition shadow-lg shadow-blue-200">Add Column</button>
+                        </div>
+                    </div>
+                </div>}
+                {activeTab === 'signatures' && <div className="space-y-6">
+                    <h3 className="text-xl font-bold text-slate-800 border-b pb-4">Print Signatures</h3>
+                    <div className="space-y-4">
+                        {formData.signatures.map((sig, idx) => (
+                            <div key={sig.id} className="bg-white p-4 rounded-xl border border-slate-200 flex gap-4 items-center">
+                                <div className="flex-1 grid grid-cols-2 gap-4">
+                                    <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Label (Payment)</label><input type="text" value={sig.label} onChange={(e) => handleSignatureChange(idx, 'label', e.target.value)} className="w-full border p-2 rounded-lg text-sm font-medium"/></div>
+                                    <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">Label (Receipt)</label><input type="text" value={sig.labelReceipt || ''} onChange={(e) => handleSignatureChange(idx, 'labelReceipt', e.target.value)} className="w-full border p-2 rounded-lg text-sm font-medium"/></div>
+                                </div>
+                                <div className="flex items-center gap-4 pt-4 border-l pl-4 border-slate-100">
+                                    <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={sig.visible} onChange={(e) => handleSignatureChange(idx, 'visible', e.target.checked)} className="rounded text-blue-600"/> <span className="text-sm font-medium">Show</span></label>
+                                    <button onClick={() => removeSignature(idx)} className="text-slate-400 hover:text-red-500"><X size={18}/></button>
+                                </div>
+                            </div>
+                        ))}
+                        <button onClick={addSignature} className="w-full py-3 border border-dashed border-slate-300 rounded-xl text-slate-500 font-bold hover:bg-slate-50 transition">+ Add Signature Line</button>
+                    </div>
+                </div>}
+                {activeTab === 'security' && <div className="space-y-8">
+                    <h3 className="text-xl font-bold text-slate-800 border-b pb-4">Access Control</h3>
+                    <div className="grid grid-cols-2 gap-8">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
+                            <h4 className="font-bold text-lg text-slate-800 mb-1">Standard User</h4>
+                            <p className="text-sm text-slate-500 mb-6">Daily operators permissions.</p>
+                            <div className="mb-6"><label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Access PIN</label><input type="text" maxLength={4} value={formData.security.userPin} onChange={e => setFormData({...formData, security: { ...formData.security, userPin: e.target.value }})} className="w-full text-center text-2xl font-bold tracking-[0.3em] border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-slate-700"/></div>
+                            <div className="space-y-4 border-t pt-4">
+                                <label className="flex justify-between items-center cursor-pointer group"><span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">Allow Deleting</span><div className={`w-11 h-6 rounded-full relative transition ${formData.security.permissions.userCanDelete ? 'bg-emerald-500' : 'bg-slate-200'}`}><input type="checkbox" className="hidden" checked={formData.security.permissions.userCanDelete} onChange={e => setFormData({...formData, security: { ...formData.security, permissions: { ...formData.security.permissions, userCanDelete: e.target.checked } } })} /><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${formData.security.permissions.userCanDelete ? 'left-[24px]' : 'left-[4px]'}`}></div></div></label>
+                                <label className="flex justify-between items-center cursor-pointer group"><span className="text-sm font-medium text-slate-700 group-hover:text-slate-900">Allow Export CSV</span><div className={`w-11 h-6 rounded-full relative transition ${formData.security.permissions.userCanExport ? 'bg-emerald-500' : 'bg-slate-200'}`}><input type="checkbox" className="hidden" checked={formData.security.permissions.userCanExport} onChange={e => setFormData({...formData, security: { ...formData.security, permissions: { ...formData.security.permissions, userCanExport: e.target.checked } } })} /><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-sm ${formData.security.permissions.userCanExport ? 'left-[24px]' : 'left-[4px]'}`}></div></div></label>
+                            </div>
+                        </div>
+                        <div className="bg-slate-900 p-6 rounded-2xl shadow-lg shadow-slate-200 text-white relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-32 bg-slate-800 rounded-full blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2"></div>
+                            <h4 className="font-bold text-lg mb-1 relative z-10">Administrator</h4>
+                            <p className="text-sm text-slate-400 mb-6 relative z-10">Full system configuration access.</p>
+                            <div className="mb-6 relative z-10"><label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Admin PIN</label><input type="text" maxLength={4} value={formData.security.adminPin} onChange={e => setFormData({...formData, security: { ...formData.security, adminPin: e.target.value }})} className="w-full text-center text-2xl font-bold tracking-[0.3em] border border-slate-700 bg-slate-800 p-3 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-white"/></div>
+                            <div className="space-y-2 pt-4 border-t border-slate-800 relative z-10">
+                                <div className="flex items-center gap-3 text-sm text-slate-300"><Check size={16} className="text-emerald-400"/> Settings Configuration</div>
+                                <div className="flex items-center gap-3 text-sm text-slate-300"><Check size={16} className="text-emerald-400"/> Data Management</div>
+                                <div className="flex items-center gap-3 text-sm text-slate-300"><Check size={16} className="text-emerald-400"/> Role Management</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>}
+                {activeTab === 'data' && <div className="space-y-8">
+                    <h3 className="text-xl font-bold text-slate-800 border-b pb-4">Data Management</h3>
+                    <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-2xl flex items-center justify-between">
+                        <div><h4 className="font-bold text-emerald-900 mb-1">Auto-Export CSV</h4><p className="text-sm text-emerald-700">Save a local copy every time a voucher is created.</p></div>
+                        <div className={`w-14 h-8 rounded-full relative cursor-pointer transition ${formData.data.autoExportCsv ? 'bg-emerald-600' : 'bg-slate-300'}`} onClick={() => setFormData({...formData, data: { ...formData.data, autoExportCsv: !formData.data.autoExportCsv }})}><div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${formData.data.autoExportCsv ? 'left-[28px]' : 'left-[4px]'}`}></div></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-6">
+                        <div className="border border-slate-200 p-6 rounded-2xl hover:shadow-md transition bg-white">
+                            <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2"><FileJson size={20} className="text-blue-500"/> Backup System</h4>
+                            <p className="text-sm text-slate-500 mb-4">Download a full JSON snapshot of data & settings.</p>
+                            <button onClick={backup} className="w-full py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition">Download Backup</button>
+                        </div>
+                        <div className="border border-slate-200 p-6 rounded-2xl hover:shadow-md transition bg-white">
+                            <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2"><Upload size={20} className="text-purple-500"/> Restore System</h4>
+                            <p className="text-sm text-slate-500 mb-4">Overwrite current system with a backup file.</p>
+                            <label className="w-full py-3 border-2 border-dashed border-slate-300 text-slate-600 rounded-xl font-bold hover:bg-slate-50 transition cursor-pointer flex justify-center">Select File <input type="file" onChange={restore} className="hidden"/></label>
+                        </div>
+                    </div>
+                </div>}
+             </div></div><div className="p-6 border-t bg-white flex justify-end gap-3 z-10"><button onClick={onClose} className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition">Cancel</button><button onClick={()=>onSave(formData)} className="px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 active:scale-[0.98] transition">Save Changes</button></div></div></div>
+          );
+      };
+
+      const CSVImport = ({ onImport, onClose, existingVouchers }) => {
+          const [preview, setPreview] = useState([]);
+          const settings = loadSettings();
+          const activeFields = settings.itemFields.filter(f => f.visible);
+          
+          const parseCSVLine = (line) => { const result = []; let current = ''; let inQuotes = false; for (let i = 0; i < line.length; i++) { const char = line[i]; if (char === '"' && line[i + 1] === '"') { current += '"'; i++; } else if (char === '"') { inQuotes = !inQuotes; } else if (char === ',' && !inQuotes) { result.push(current.trim()); current = ''; } else { current += char; } } result.push(current.trim()); return result; };
+          const processFile = (e) => { const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (ev) => { const lines = ev.target.result.split('\n'); const parsedVouchers = []; const voucherGroups = new Map(); let tempAllVouchers = [...existingVouchers]; for(let i=1; i<lines.length; i++) { if(!lines[i].trim()) continue; const cols = parseCSVLine(lines[i]); let idx = 0; const date = formatDateForInput(cols[idx++] || new Date().toISOString().split('T')[0]); const voucherNoRaw = cols[idx++] || ''; const typeStr = (cols[idx++] || 'PAYMENT').toUpperCase(); const type = (typeStr.includes('RECEIPT') || typeStr === 'RPV') ? 'RECEIPT' : 'PAYMENT'; const partyName = cols[idx++] || 'Unknown'; const modeStr = (cols[idx++] || 'CASH').toUpperCase(); const mode = ['BANK', 'CHEQUE', 'ONLINE'].includes(modeStr) ? modeStr : 'CASH'; const currency = (cols[idx++] || settings.currencyCode).toUpperCase(); const groupID = cols[idx] ? cols[idx].trim() : null; idx++; const customValues = {}; for (const field of activeFields) { customValues[field.id] = cols[idx++] || ''; } const description = cols[idx++] || ''; const amount = parseFloat(cols[idx++]) || 0; const newItem = { id: Date.now().toString() + i + '_item', customValues, description, amount }; if (groupID) { if (voucherGroups.has(groupID)) { const existingVoucher = voucherGroups.get(groupID); existingVoucher.items.push(newItem); existingVoucher.amount += newItem.amount; existingVoucher.description = `Multi-item voucher (${existingVoucher.items.length} items)`; } else { const vNo = voucherNoRaw || generateAdvancedVoucherNumber(tempAllVouchers, type); const newVoucher = { id: Date.now().toString() + i, date, voucherNo: vNo, type, partyName, amount, currency, mode, description: description, items: [newItem], createdAt: Date.now() }; voucherGroups.set(groupID, newVoucher); parsedVouchers.push(newVoucher); tempAllVouchers.push(newVoucher); } } else { const vNo = voucherNoRaw || generateAdvancedVoucherNumber(tempAllVouchers, type); const newVoucher = { id: Date.now().toString() + i, date, voucherNo: vNo, type, partyName, amount, currency, mode, description: description, items: [newItem], createdAt: Date.now() }; parsedVouchers.push(newVoucher); tempAllVouchers.push(newVoucher); } } setPreview(parsedVouchers); }; r.readAsText(f); };
+          const downloadTemplate = () => { const customHeaders = activeFields.map(f => f.label).join(','); const headers = `Date,Voucher No,Type,Party,Mode,Currency,Group,${customHeaders},Description,Amount`; const example = `25/10/2025,,PAYMENT,John Doe,CASH,${settings.currencyCode},GRP1,${activeFields.map(_=>'Data').join(',')},Service Fee,150.00`; const blob = new Blob([headers + '\n' + example], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'template.csv'; a.click(); };
+
+          return (
+             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-6"><div className="bg-white rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col shadow-2xl animate-fade-in ring-1 ring-white/10"><div className="p-6 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800">Bulk Import</h3><button onClick={onClose}><X size={24} className="text-slate-400 hover:text-slate-600"/></button></div>
+             <div className="flex-1 overflow-y-auto p-8">
+             {preview.length === 0 ? <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50"><div className="p-4 bg-blue-100 text-blue-600 rounded-full inline-block mb-4"><Upload size={32}/></div><h4 className="text-lg font-bold text-slate-800 mb-2">Upload CSV File</h4><p className="mb-8 text-slate-500 max-w-md mx-auto">Import vouchers in bulk. Ensure your CSV matches the required format including any custom fields you've configured.</p><div className="flex justify-center gap-4"><button onClick={downloadTemplate} className="px-6 py-3 border border-slate-300 rounded-xl font-bold text-slate-700 hover:bg-slate-50 transition">Download Template</button><label className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold cursor-pointer hover:bg-blue-700 transition shadow-lg shadow-blue-200 active:scale-[0.98]">Select CSV File <input type="file" onChange={processFile} className="hidden" accept=".csv"/></label></div></div> : 
+             <div className="space-y-6">
+                 <div className="flex justify-between items-center p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800"><p className="font-bold flex items-center gap-2"><CheckCircle size={20}/> Ready to import {preview.length} vouchers</p><button onClick={()=>setPreview([])} className="text-emerald-600 hover:underline text-sm font-bold">Clear & Start Over</button></div>
+                 <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm"><table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-500 font-bold uppercase text-xs"><tr><th className="p-4">Date</th><th className="p-4">No</th><th className="p-4">Type</th><th className="p-4">Party</th><th className="p-4 text-center">Items</th><th className="p-4 text-right">Total</th></tr></thead><tbody className="divide-y divide-slate-100">{preview.map((v, i)=>(<tr key={i} className="bg-white"><td className="p-4 whitespace-nowrap font-medium text-slate-600">{v.date}</td><td className="p-4 font-mono text-xs text-slate-400">{v.voucherNo}</td><td className="p-4"><span className="text-[10px] font-bold bg-slate-100 px-2 py-1 rounded text-slate-600 uppercase tracking-wide">{v.type}</span></td><td className="p-4 font-medium text-slate-800">{v.partyName}</td><td className="p-4 text-center text-xs text-slate-400 bg-slate-50/50">{v.items.length}</td><td className="p-4 text-right font-mono font-bold text-slate-800">{v.amount.toFixed(2)}</td></tr>))}</tbody></table></div>
+             </div>}
+             </div>
+             {preview.length > 0 && <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-4"><button onClick={onClose} className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-50 rounded-xl transition">Cancel</button><button onClick={()=>onImport(preview)} className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-emerald-700 transition shadow-lg shadow-emerald-200 active:scale-[0.98]">Confirm Import</button></div>}</div></div>
+          );
+      };
+
+      const PrintView = ({ vouchers, settings, onClose }) => {
+        const activeFields = settings.itemFields.filter(f => f.visible);
+        // Default PDF Settings Fallback
+        const ps = settings.pdfSettings || { template: 'classic', bodyFontSize: 12, titleFontSize: 30, margins: { top: 15, right: 15, bottom: 15, left: 15 }, signatureAlign: 'center', boldLabels: true, compactTable: false };
+        const template = ps.template || 'classic';
+
+        const pages = useMemo(() => {
+            const result = [];
+            const isProf = template === 'professional';
+            
+            // Capacities
+            const limitFirst = isProf ? 12 : 12; // Page 1 with Header & Footer
+            // Reduced limitMiddle for Classic to ensure signatures fit on every page
+            const limitMiddle = isProf ? 18 : 20; 
+            const limitLast = isProf ? 12 : 16; 
+            
+            vouchers.forEach(v => {
+                const items = v.items;
+                // Check if it fits on a single page
+                if (items.length <= limitFirst) {
+                     result.push({ ...v, items, pageType: 'single', pageNum: 1, totalPages: 1, uniqueKey: `${v.id}-1` });
+                } else {
+                     // Multi-page
+                     let remaining = [...items];
+                     const voucherPages = [];
+                     
+                     // 1. First Page
+                     const firstChunk = remaining.slice(0, limitFirst);
+                     voucherPages.push({ items: firstChunk, pageType: 'first' });
+                     remaining = remaining.slice(limitFirst);
+                     
+                     // 2. Subsequent Pages
+                     while(remaining.length > 0) {
+                         // Can we fit the rest in a 'last' page?
+                         if (remaining.length <= limitLast) {
+                             voucherPages.push({ items: remaining, pageType: 'last' });
+                             remaining = [];
+                         } else {
+                             // Must use a middle page
+                             const chunk = remaining.slice(0, limitMiddle);
+                             voucherPages.push({ items: chunk, pageType: 'middle' });
+                             remaining = remaining.slice(limitMiddle);
+                         }
+                     }
+                     
+                     voucherPages.forEach((vp, idx) => {
+                        result.push({ 
+                            ...v, 
+                            items: vp.items, 
+                            pageType: vp.pageType, 
+                            pageNum: idx + 1, 
+                            totalPages: voucherPages.length,
+                            uniqueKey: `${v.id}-${idx+1}`
+                        });
+                     });
+                }
+            });
+            return result;
+        }, [vouchers, template]);
+        
+        return (
+            <div className="fixed inset-0 z-[100] bg-slate-900/90 backdrop-blur-sm overflow-auto flex justify-center py-10 print:absolute print:inset-0 print:bg-white print:block print:overflow-visible print:h-auto print:w-full print:z-[1000]">
+                {/* Controls */}
+                <div className="no-print fixed top-6 right-6 flex gap-4 bg-white p-2 rounded-xl shadow-2xl z-50">
+                    <button onClick={()=>window.print()} className="bg-blue-600 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-blue-700 transition shadow-md flex items-center gap-2"><Printer size={18}/> Print</button>
+                    <button onClick={onClose} className="bg-slate-100 text-slate-700 px-6 py-2.5 rounded-lg font-bold hover:bg-slate-200 transition">Close</button>
+                </div>
+
+                <div className="flex flex-col items-center gap-8 print:block print:w-full print:h-auto">
+                    {pages.map((v, i) => {
+                        const cCode = v.currency || settings.currencyCode;
+                        const cSym = cCode === settings.secondaryCurrencyCode ? settings.secondaryCurrencySymbol : settings.currencySymbol;
+                        const isLastPage = v.pageType === 'single' || v.pageType === 'last';
+                        const isFirstPage = v.pageNum === 1;
+                        
+                        const minRows = 10;
+                        const itemsToRender = [...v.items];
+                        while(itemsToRender.length < minRows) itemsToRender.push({ id: `empty-${itemsToRender.length}`, description: '', amount: 0, customValues: {} });
+
+                        const pageStyle = {
+                            paddingTop: `${ps.margins.top}mm`,
+                            paddingRight: `${ps.margins.right}mm`,
+                            paddingBottom: `${ps.margins.bottom}mm`,
+                            paddingLeft: `${ps.margins.left}mm`,
+                            fontSize: `${ps.bodyFontSize}px`
+                        };
+
+                        if (template === 'professional') {
+                          return (
+                            <div key={v.uniqueKey} className="w-[210mm] bg-white shadow-2xl print:shadow-none print:w-full print:h-auto relative flex flex-col text-black box-border font-sans" style={{minHeight: '297mm', pageBreakAfter: i < pages.length - 1 ? 'always' : 'auto', ...pageStyle}}>
+                              
+                              {/* Header Section - First Page Only */}
+                              {isFirstPage && (
+                                <>
+                                  <div className="flex justify-between items-start mb-6">
+                                    <div className="flex flex-col items-start w-2/3">
+                                      <div className="mb-4 h-16 flex items-center">
+                                          {settings.logoUrl ? (
+                                            <img src={settings.logoUrl} style={{maxHeight: '80px', width: `${settings.logoWidth}px`}} className="object-contain" alt="Logo"/>
+                                          ) : (
+                                            <h1 className="font-bold text-xl uppercase tracking-tight">{settings.companyName}</h1>
+                                          )}
+                                      </div>
+                                      <h2 className="text-3xl font-bold uppercase tracking-wide mt-2">{v.type} VOUCHER {v.totalPages > 1 && <span className="text-lg text-slate-500 ml-2">(Page {v.pageNum}/{v.totalPages})</span>}</h2>
+                                    </div>
+                                    
+                                    {/* Right Table */}
+                                    <div className="w-64 text-sm">
+                                      <table className="w-full border-collapse border border-black font-bold text-xs">
+                                        <tbody>
+                                          <tr><td className="border border-black p-1 pl-2">Currency:</td><td className="border border-black p-1 text-center bg-white">{cCode}</td></tr>
+                                          <tr><td className="border border-black p-1 pl-2">Ex. Rate:</td><td className="border border-black p-1 text-center bg-white">N/A</td></tr>
+                                          <tr><td className="border border-black p-1 pl-2">Amount:</td><td className="border border-black p-1 text-center bg-white">{cSym}{v.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td></tr>
+                                          <tr><td className="border border-black p-1 pl-2">Method:</td><td className="border border-black p-1 text-center bg-white uppercase">{v.mode}</td></tr>
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+
+                                  <div className="border-b-2 border-black mb-6"></div>
+
+                                  {/* Info Row */}
+                                  <div className="flex gap-8 mb-6">
+                                    <div className="flex items-center border border-black p-2 w-64">
+                                      <span className="font-bold mr-2 text-sm">Date:</span>
+                                      <span className="border-l border-black pl-4 flex-1 font-mono font-bold text-sm">{v.date}</span>
+                                    </div>
+                                    <div className="flex items-center border border-black p-2 flex-1">
+                                      <span className="font-bold mr-2 text-sm">Voucher No:</span>
+                                      <span className="border-l border-black pl-4 flex-1 font-mono font-bold text-sm">{v.voucherNo}</span>
+                                    </div>
+                                  </div>
+
+                                  {/* Payee */}
+                                  <div className="flex items-end gap-4 mb-6">
+                                    <span className="font-bold text-sm whitespace-nowrap w-24">{v.type === 'RECEIPT' ? 'Received From:' : 'Paid To:'}</span>
+                                    <div className="font-bold text-lg border-b border-black flex-1 pb-1">{v.partyName}</div>
+                                  </div>
+                                </>
+                              )}
+
+                              {/* Main Table */}
+                              <div className="flex-1 mb-6">
+                                <table className="w-full border-collapse border border-black text-xs">
+                                  <thead>
+                                    <tr className="bg-black text-white print:bg-black print:text-white">
+                                      {activeFields.map(f => (
+                                          <th key={f.id} className="border border-black p-2 text-left font-bold">{f.label}</th>
+                                      ))}
+                                      <th className="border border-black p-2 text-left font-bold">Description</th>
+                                      <th className="border border-black p-2 text-right font-bold w-32">Amount</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {itemsToRender.map((item, idx) => (
+                                      <tr key={item.id}>
+                                         {activeFields.map(f => (
+                                            <td key={f.id} className="border border-black p-2 h-8 align-top text-center">{item.customValues?.[f.id] || ''}</td>
+                                         ))}
+                                         <td className="border border-black p-2 h-8 align-top">{item.description}</td>
+                                         <td className="border border-black p-2 h-8 align-top text-right font-mono">{item.amount ? item.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : ''}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                  <tfoot>
+                                     <tr className="bg-slate-100 print:bg-slate-100">
+                                       <td colSpan={activeFields.length + 1} className="border border-black p-2 text-right font-bold uppercase text-[10px]">
+                                            {isLastPage ? 'Total Amount' : ''}
+                                       </td>
+                                       <td className="border border-black p-2 text-right font-bold text-sm">
+                                            {isLastPage ? `${cSym}${v.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}` : ''}
+                                       </td>
+                                     </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+
+                              {/* Footer Boxes - Only on Last Page */}
+                              {isLastPage ? (
+                                  <div className="space-y-3 mb-12">
+                                    <div className="border border-black p-2 flex items-center bg-white">
+                                        <span className="font-bold text-sm mr-2 whitespace-nowrap">Amount in Words:</span>
+                                        <span className="font-bold italic uppercase flex-1 text-sm">{numberToWords(v.amount)}</span>
+                                    </div>
+                                    <div className="border border-black p-2 bg-white min-h-[3rem]">
+                                        <div className="font-bold text-sm mb-1">Narration:</div>
+                                        <div className="text-sm">{v.description}</div>
+                                    </div>
+                                  </div>
+                              ) : (
+                                  <div className="mb-12 text-center text-sm font-bold italic text-slate-500">
+                                      Continued on next page...
+                                  </div>
+                              )}
+
+                              {/* Signatures - Only on Last Page for Professional */}
+                              {isLastPage && (
+                                  <div className="mt-auto pt-4 flex justify-between gap-8 text-center">
+                                     {settings.signatures.filter(s => s.visible).map(s => (
+                                        <div key={s.id} className="flex-1">
+                                            <div className="border-b border-black mb-2 h-12"></div>
+                                            <div className="font-bold text-[10px] uppercase tracking-wider">{v.type === 'RECEIPT' ? (s.labelReceipt || s.label) : s.label}</div>
+                                        </div>
+                                     ))}
+                                  </div>
+                              )}
+                              
+                              <div className="mt-auto pt-2 border-t border-slate-300 text-[9px] text-slate-400 text-center uppercase tracking-widest">
+                                Generated by System on {new Date().toLocaleDateString()}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        // Classic Template (Modified)
+                        const labelClass = `uppercase text-black tracking-wider block mb-1 ${ps.boldLabels ? 'font-black' : 'font-medium'}`;
+                        const labelStyle = { fontSize: `${Math.max(10, ps.bodyFontSize - 2)}px` };
+
+                        return (
+                            <div key={v.uniqueKey} className="w-[210mm] bg-white shadow-2xl print:shadow-none print:w-full print:h-auto relative flex flex-col text-black box-border font-sans" style={{minHeight: '297mm', pageBreakAfter: i < pages.length - 1 ? 'always' : 'auto', ...pageStyle}}>
+                                
+                                {/* Header - First Page Only */}
+                                {isFirstPage && (
+                                  <>
+                                    <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-6">
+                                        <div className="flex flex-col items-start">
+                                            {settings.logoUrl ? (
+                                                <img src={settings.logoUrl} style={{maxHeight: '80px', width: 'auto'}} className="object-contain mb-2" alt="Logo"/>
+                                            ) : (
+                                                <h1 className="font-black uppercase tracking-tight text-black" style={{fontSize: `${ps.titleFontSize}px`, lineHeight: 1.1}}>{settings.companyName}</h1>
+                                            )}
+                                            <div className="font-bold text-black uppercase tracking-widest mt-1" style={{fontSize: `${ps.bodyFontSize}px`}}>Official Voucher Record</div>
+                                        </div>
+                                        <div className="text-right">
+                                            <h2 className="font-black uppercase tracking-tighter text-black opacity-90" style={{fontSize: `${ps.titleFontSize * 1.5}px`, lineHeight: 1}}>{v.type}</h2>
+                                            {v.totalPages > 1 && <div className="text-sm font-bold mt-1">Page {v.pageNum} of {v.totalPages}</div>}
+                                            <div className="mt-3 inline-block border-2 border-black px-4 py-1">
+                                                <span className="font-mono font-bold text-black" style={{fontSize: `${ps.bodyFontSize * 1.5}px`}}>{v.voucherNo}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Meta Details - First Page Only */}
+                                    <div className="mb-8">
+                                        <div className="mb-6">
+                                            <span className={labelClass} style={labelStyle}>{v.type === 'RECEIPT' ? 'Received From' : 'Paid To'}</span>
+                                            <div className="font-bold text-black border-b-2 border-black pb-1 leading-none w-full" style={{fontSize: `${ps.titleFontSize * 0.8}px`}}>{v.partyName}</div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-12">
+                                            <div>
+                                                <span className={labelClass} style={labelStyle}>Date</span>
+                                                <div className="font-bold text-black border-b-2 border-black pb-1" style={{fontSize: `${ps.bodyFontSize * 1.25}px`}}>{v.date}</div>
+                                            </div>
+                                            <div>
+                                                <span className={labelClass} style={labelStyle}>Mode</span>
+                                                <div className="font-bold text-black uppercase border-b-2 border-black pb-1" style={{fontSize: `${ps.bodyFontSize * 1.25}px`}}>{v.mode}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                  </>
+                                )}
+
+                                {/* Table */}
+                                <div className="flex-1 mb-6">
+                                    <table className="w-full border-collapse border-2 border-black" style={{fontSize: `${ps.bodyFontSize}px`}}>
+                                        <thead>
+                                            <tr className="bg-black text-white print:bg-black print:text-white">
+                                                <th className={`text-center w-12 border-r border-white/20 font-bold uppercase tracking-wider ${ps.compactTable ? 'py-1 px-2' : 'py-2 px-3'}`}>#</th>
+                                                {activeFields.map(f => (
+                                                    <th key={f.id} className={`text-left border-r border-white/20 font-bold uppercase tracking-wider ${ps.compactTable ? 'py-1 px-2' : 'py-2 px-3'}`}>{f.label}</th>
+                                                ))}
+                                                <th className={`text-left border-r border-white/20 font-bold uppercase tracking-wider ${ps.compactTable ? 'py-1 px-2' : 'py-2 px-3'}`}>Description</th>
+                                                <th className={`text-right w-36 font-bold uppercase tracking-wider ${ps.compactTable ? 'py-1 px-2' : 'py-2 px-3'}`}>Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="text-black">
+                                            {itemsToRender.map((item, idx) => (
+                                                <tr key={item.id} className="border-b border-black">
+                                                    <td className={`font-bold border-r border-black text-center ${ps.compactTable ? 'py-1 px-2' : 'py-2 px-3'}`}>
+                                                        {(item.amount || item.description) ? idx + 1 : ''}
+                                                    </td>
+                                                    {activeFields.map(f => (
+                                                        <td key={f.id} className={`font-medium border-r border-black ${ps.compactTable ? 'py-1 px-2' : 'py-2 px-3'}`}>
+                                                            {item.customValues?.[f.id] || ''}
+                                                        </td>
+                                                    ))}
+                                                    <td className={`font-medium border-r border-black relative ${ps.compactTable ? 'py-1 px-2' : 'py-2 px-3'}`}>
+                                                        {item.description}
+                                                    </td>
+                                                    <td className={`text-right font-mono font-bold text-black border-l border-black ${ps.compactTable ? 'py-1 px-2' : 'py-2 px-3'}`}>
+                                                        {item.amount ? item.amount.toLocaleString(undefined, {minimumFractionDigits: 2}) : ''}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                        <tfoot>
+                                            <tr className="border-t-4 border-black">
+                                                <td colSpan={1 + activeFields.length} className={`text-right font-black uppercase text-black border-r border-black ${ps.compactTable ? 'py-2 px-3' : 'py-3 px-3'}`}>
+                                                    {isLastPage ? 'Grand Total' : 'Continued...'}
+                                                </td>
+                                                <td colSpan={2} className={`text-right font-black text-black ${ps.compactTable ? 'py-2 px-3' : 'py-3 px-3'}`} style={{fontSize: `${ps.bodyFontSize * 1.5}px`}}>
+                                                    {isLastPage ? `${cSym} ${v.amount.toLocaleString(undefined, {minimumFractionDigits: 2})}` : ''}
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+
+                                {/* Words & Notes - Last Page Only */}
+                                {isLastPage ? (
+                                    <div className="mt-4 space-y-6">
+                                        <div className="flex gap-4 items-baseline border-b-2 border-black pb-2">
+                                            <span className={labelClass} style={{...labelStyle, marginBottom: 0, width: '6rem'}}>In Words:</span>
+                                            <span className="font-bold italic text-black flex-1 leading-relaxed uppercase" style={{fontSize: `${ps.bodyFontSize * 1.1}px`}}>
+                                                {numberToWords(v.amount)}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="border-2 border-black p-3 min-h-[4rem]">
+                                            <span className={labelClass} style={labelStyle}>Notes / Narration</span>
+                                            <p className="font-medium leading-tight text-black" style={{fontSize: `${ps.bodyFontSize}px`}}>{v.description || ''}</p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="mt-4 border-t-2 border-black pt-4 text-center font-bold italic">
+                                        ... Continued on Next Page ...
+                                    </div>
+                                )}
+
+                                {/* Signatures - All Pages for Classic */}
+                                <div className="mt-auto pt-10">
+                                    <div className="flex justify-between gap-8" style={{ textAlign: ps.signatureAlign }}>
+                                        {settings.signatures.filter(s => s.visible).map(s => (
+                                            <div key={s.id} className="flex-1 min-w-0">
+                                                <div className="h-16 border-b-2 border-black mb-2 mx-auto" style={{width: '80%'}}></div>
+                                                <div className="font-black uppercase tracking-widest text-black" style={{fontSize: `${Math.max(10, ps.bodyFontSize - 2)}px`}}>
+                                                    {v.type === 'RECEIPT' ? (s.labelReceipt || s.label) : s.label}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-6 flex justify-between items-center border-t border-black pt-2">
+                                        <span className="font-bold text-black uppercase tracking-widest" style={{fontSize: '9px'}}>Generated by {settings.companyName}</span>
+                                        <span className="font-bold text-black uppercase tracking-widest" style={{fontSize: '9px'}}>Page {v.pageNum} of {v.totalPages}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+      };
+
+      const App = () => {
+        const [role, setRole] = useState('guest');
+        const [settings, setSettings] = useState(loadSettings());
+        const [vouchers, setVouchers] = useState([]);
+        const [view, setView] = useState('dashboard');
+        const [showForm, setShowForm] = useState(false);
+        const [editingVoucher, setEditingVoucher] = useState(null);
+        const [showSettings, setShowSettings] = useState(false);
+        const [showImport, setShowImport] = useState(false);
+        const [printData, setPrintData] = useState(null);
+
+        useEffect(() => { setVouchers(loadVouchers()); }, []);
+        useEffect(() => { saveSettings(settings); }, [settings]);
+
+        const handleSave = (v) => {
+           const updated = editingVoucher ? vouchers.map(x => x.id === v.id ? v : x) : [...vouchers, v];
+           setVouchers(updated); saveVouchers(updated); setShowForm(false); setEditingVoucher(null);
+           if(settings.data.autoExportCsv) exportToExcelFile(updated, settings);
+        };
+        const handleDelete = (id) => { if(confirm("Delete?")) { const u = vouchers.filter(x=>x.id!==id); setVouchers(u); saveVouchers(u); } };
+        const handleImport = (newV) => { const u = [...vouchers, ...newV]; setVouchers(u); saveVouchers(u); setShowImport(false); };
+        const handleBulkDelete = (ids) => {
+            if (!window.confirm(`Are you sure you want to delete the ${ids.length} selected voucher(s)? This cannot be undone.`)) return;
+            const updated = vouchers.filter(v => !ids.includes(v.id));
+            setVouchers(updated);
+            saveVouchers(updated);
+            if(settings.data.autoExportCsv) exportToExcelFile(updated, settings);
+        };
+        const handleRestore = (restoredVouchers, restoredSettings) => {
+            setVouchers(restoredVouchers);
+            setSettings(restoredSettings);
+            saveVouchers(restoredVouchers);
+            saveSettings(restoredSettings);
+            setShowSettings(false);
+        };
+        
+        if (role === 'guest') return <Login onLogin={setRole} settings={settings} />;
+
+        return (
+          <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900 selection:bg-blue-100 selection:text-blue-900 relative print:h-auto print:overflow-visible">
+            {/* Wrap main content to hide during print */}
+            <div className={`flex h-full w-full ${printData ? 'print:hidden' : ''}`}>
+                <aside className="w-72 bg-slate-900 text-slate-300 flex flex-col hidden md:flex shrink-0 shadow-xl z-20">
+                    <div className="p-8 pb-4">
+                        <h1 className="text-xl font-bold text-white tracking-tight leading-none">{settings.companyName}</h1>
+                        <p className="text-xs text-slate-500 mt-2 font-medium uppercase tracking-wider">Voucher System v2.0</p>
+                    </div>
+                    <div className="px-4 py-2">
+                        <div className="bg-slate-800/50 rounded-xl p-4 flex items-center gap-3 border border-slate-800">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-900/50">{role[0].toUpperCase()}</div>
+                            <div>
+                                <p className="text-sm font-bold text-white capitalize">{role} Account</p>
+                                <p className="text-[10px] text-slate-400 flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online</p>
+                            </div>
+                        </div>
+                    </div>
+                    <nav className="flex-1 px-4 py-6 space-y-1">
+                        <p className="px-4 text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Main Menu</p>
+                        <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${view==='dashboard'?'bg-blue-600 text-white shadow-lg shadow-blue-900/20':'hover:bg-slate-800 hover:text-white'}`}><LayoutDashboard size={20}/> Dashboard</button>
+                        <button onClick={() => setView('list')} className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all font-medium ${view==='list'?'bg-blue-600 text-white shadow-lg shadow-blue-900/20':'hover:bg-slate-800 hover:text-white'}`}><FileText size={20}/> Vouchers <span className="ml-auto bg-slate-800 px-2 py-0.5 rounded text-xs font-bold text-slate-400">{vouchers.length}</span></button>
+                    </nav>
+                    <div className="p-4 border-t border-slate-800">
+                        {(role === 'admin' || settings.security.permissions.userCanEditSettings) && <button onClick={() => setShowSettings(true)} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium hover:bg-slate-800 rounded-xl transition-all mb-1"><SettingsIcon size={18}/> Settings</button>}
+                        <button onClick={() => setRole('guest')} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-950/30 rounded-xl transition-all"><LogOut size={18}/> Sign Out</button>
+                    </div>
+                </aside>
+
+                <main className="flex-1 flex flex-col overflow-hidden relative">
+                   <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200/60 flex items-center justify-between px-8 z-10 sticky top-0">
+                       <div>
+                           <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{view === 'dashboard' ? 'Overview' : 'Voucher Management'}</h2>
+                           <p className="text-xs text-slate-400 font-medium mt-0.5">{new Date().toLocaleDateString(undefined, {weekday:'long', year:'numeric', month:'long', day:'numeric'})}</p>
+                       </div>
+                       <div className="flex gap-3">
+                           <button onClick={() => { setEditingVoucher(null); setShowForm(true); }} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all active:scale-95"><Plus size={20} /> Create Voucher</button>
+                           <button onClick={() => setShowImport(true)} className="bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition active:scale-95"><Download size={20} /> Import</button>
+                       </div>
+                   </header>
+                   <div className="flex-1 overflow-auto p-8 scroll-smooth">
+                      {view === 'dashboard' ? <Dashboard vouchers={vouchers} settings={settings} /> : <VoucherList vouchers={vouchers} onEdit={(v) => { setEditingVoucher(v); setShowForm(true); }} onDelete={handleDelete} onBulkDelete={handleBulkDelete} onPrint={setPrintData} onExportExcel={(data) => exportToExcelFile(data, settings)} settings={settings} role={role} />}
+                   </div>
+                </main>
+            </div>
+            
+            {showForm && <VoucherForm onSave={handleSave} onCancel={() => { setShowForm(false); setEditingVoucher(null); }} initialData={editingVoucher} existingVouchers={vouchers} settings={settings} />}
+            {showSettings && <SettingsModal settings={settings} onSave={(s) => { setSettings(s); setShowSettings(false); }} onClose={() => setShowSettings(false)} onRestore={handleRestore} />}
+            {showImport && <CSVImport onImport={handleImport} onClose={() => setShowImport(false)} existingVouchers={vouchers} />}
+            {printData && <PrintView vouchers={printData} settings={settings} onClose={() => setPrintData(null)} />}
+          </div>
+        );
+      };
+
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
